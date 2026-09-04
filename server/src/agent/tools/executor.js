@@ -1,6 +1,14 @@
 import { config } from '../../config.js';
 import { db } from '../../db/client.js';
 
+async function tryFetchJson(url, options = {}) {
+  try {
+    const res = await fetch(url, options);
+    if (res.ok) return await res.json();
+  } catch (_) {}
+  return null;
+}
+
 /**
  * Execute a tool against the CampusOS backend REST API / DB.
  * Ensures the agent always interacts with live data.
@@ -11,8 +19,8 @@ export async function executeTool(name, args = {}, baseUrl = `http://localhost:$
       case 'get_current_datetime': {
         const url = new URL(`${baseUrl}/meta/now`);
         if (args.override) url.searchParams.set('override', args.override);
-        const res = await fetch(url);
-        if (res.ok) return await res.json();
+        const data = await tryFetchJson(url);
+        if (data !== null) return data;
         // Fallback to local server time
         const now = args.override ? new Date(args.override) : new Date();
         const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -31,8 +39,8 @@ export async function executeTool(name, args = {}, baseUrl = `http://localhost:$
         if (args.course) url.searchParams.set('course', args.course);
         if (args.room) url.searchParams.set('room', args.room);
         if (args.instructor) url.searchParams.set('instructor', args.instructor);
-        const res = await fetch(url);
-        if (res.ok) return await res.json();
+        const data = await tryFetchJson(url);
+        if (data !== null) return data;
         return await db.schedules.getAll(args);
       }
 
@@ -41,8 +49,8 @@ export async function executeTool(name, args = {}, baseUrl = `http://localhost:$
         if (args.status) url.searchParams.set('status', args.status);
         if (args.due_before) url.searchParams.set('due_before', args.due_before);
         if (args.course) url.searchParams.set('course', args.course);
-        const res = await fetch(url);
-        if (res.ok) return await res.json();
+        const data = await tryFetchJson(url);
+        if (data !== null) return data;
         return await db.assignments.getAll(args);
       }
 
@@ -50,8 +58,8 @@ export async function executeTool(name, args = {}, baseUrl = `http://localhost:$
         const url = new URL(`${baseUrl}/announcements`);
         if (args.priority) url.searchParams.set('priority', args.priority);
         if (args.active_only !== undefined) url.searchParams.set('active_only', String(args.active_only));
-        const res = await fetch(url);
-        if (res.ok) return await res.json();
+        const data = await tryFetchJson(url);
+        if (data !== null) return data;
         return await db.announcements.getAll(args);
       }
 
@@ -59,8 +67,8 @@ export async function executeTool(name, args = {}, baseUrl = `http://localhost:$
         const url = new URL(`${baseUrl}/events`);
         if (args.status) url.searchParams.set('status', args.status);
         if (args.after) url.searchParams.set('after', args.after);
-        const res = await fetch(url);
-        if (res.ok) return await res.json();
+        const data = await tryFetchJson(url);
+        if (data !== null) return data;
         return await db.events.getAll(args);
       }
 
@@ -76,8 +84,8 @@ export async function executeTool(name, args = {}, baseUrl = `http://localhost:$
         if (args.start_time) url.searchParams.set('start_time', args.start_time);
         if (args.end_time) url.searchParams.set('end_time', args.end_time);
         if (args.status) url.searchParams.set('status', args.status);
-        const res = await fetch(url);
-        if (res.ok) return await res.json();
+        const data = await tryFetchJson(url);
+        if (data !== null) return data;
         return await db.rooms.getAll(args);
       }
 
@@ -92,31 +100,51 @@ export async function executeTool(name, args = {}, baseUrl = `http://localhost:$
           return { error: 'room_not_found', message: `Room '${target}' was not found.` };
         }
 
-        const res = await fetch(`${baseUrl}/rooms/${room.id}/book`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            booked_by: args.booked_by || 'Student',
-            date: args.date,
-            start_time: args.start_time,
-            end_time: args.end_time,
-            purpose: args.purpose || 'Group study / Project session'
-          })
-        });
+        try {
+          const res = await fetch(`${baseUrl}/rooms/${room.id}/book`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              booked_by: args.booked_by || 'Student',
+              date: args.date,
+              start_time: args.start_time,
+              end_time: args.end_time,
+              purpose: args.purpose || 'Group study / Project session'
+            })
+          });
 
-        const data = await res.json();
-        if (!res.ok) {
+          const data = await res.json();
+          if (!res.ok) {
+            return {
+              error: data.error || 'booking_failed',
+              message: data.message || `Booking failed with status ${res.status}`,
+              status: res.status
+            };
+          }
           return {
-            error: data.error || 'booking_failed',
-            message: data.message || `Booking failed with status ${res.status}`,
-            status: res.status
+            ...data,
+            room_number: room.room_number,
+            room_id: room.id
           };
+        } catch (_) {
+          try {
+            const bookingResult = await db.rooms.addBooking(room.id, {
+              booked_by: args.booked_by || 'Student',
+              date: args.date,
+              start_time: args.start_time,
+              end_time: args.end_time,
+              purpose: args.purpose || 'Group study / Project session'
+            });
+            return {
+              success: true,
+              booking: bookingResult,
+              room_number: room.room_number,
+              room_id: room.id
+            };
+          } catch (dbErr) {
+            return { error: dbErr.code || dbErr.error || 'booking_failed', message: dbErr.message, status: dbErr.statusCode || 400 };
+          }
         }
-        return {
-          ...data,
-          room_number: room.room_number,
-          room_id: room.id
-        };
       }
 
       case 'cancel_booking': {
@@ -126,14 +154,19 @@ export async function executeTool(name, args = {}, baseUrl = `http://localhost:$
           return { error: 'room_not_found', message: `Room '${target}' was not found.` };
         }
 
-        const res = await fetch(`${baseUrl}/rooms/${room.id}/bookings/${args.booking_id}`, {
-          method: 'DELETE'
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          return { error: data.error || 'cancellation_failed', message: data.message };
+        try {
+          const res = await fetch(`${baseUrl}/rooms/${room.id}/bookings/${args.booking_id}`, {
+            method: 'DELETE'
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            return { error: data.error || 'cancellation_failed', message: data.message };
+          }
+          return data;
+        } catch (_) {
+          const ok = await db.rooms.cancelBooking(room.id, args.booking_id);
+          return ok ? { success: true } : { error: 'cancellation_failed', message: 'Booking not found' };
         }
-        return data;
       }
 
       case 'register_for_event': {
@@ -158,29 +191,47 @@ export async function executeTool(name, args = {}, baseUrl = `http://localhost:$
           return { error: 'event_not_found', message: `Event '${target}' was not found.` };
         }
 
-        const res = await fetch(`${baseUrl}/events/${event.id}/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            student_id: args.student_id || '22-41988',
-            name: args.name || 'Current Student'
-          })
-        });
+        try {
+          const res = await fetch(`${baseUrl}/events/${event.id}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              student_id: args.student_id || '22-41988',
+              name: args.name || 'Current Student'
+            })
+          });
 
-        const data = await res.json();
-        if (!res.ok) {
+          const data = await res.json();
+          if (!res.ok) {
+            return {
+              error: data.error || 'registration_failed',
+              message: data.message || `Registration failed with status ${res.status}`,
+              status: res.status
+            };
+          }
           return {
-            error: data.error || 'registration_failed',
-            message: data.message || `Registration failed with status ${res.status}`,
-            status: res.status
+            ...data,
+            event_name: event.name,
+            venue: event.venue,
+            date: event.date
           };
+        } catch (_) {
+          try {
+            const regResult = await db.events.registerStudent(event.id, {
+              student_id: args.student_id || '22-41988',
+              name: args.name || 'Current Student'
+            });
+            return {
+              success: true,
+              registration: regResult,
+              event_name: event.name,
+              venue: event.venue,
+              date: event.date
+            };
+          } catch (dbErr) {
+            return { error: dbErr.code || dbErr.error || 'registration_failed', message: dbErr.message, status: dbErr.statusCode || 400 };
+          }
         }
-        return {
-          ...data,
-          event_name: event.name,
-          venue: event.venue,
-          date: event.date
-        };
       }
 
       case 'cancel_registration': {

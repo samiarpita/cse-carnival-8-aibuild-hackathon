@@ -62,6 +62,8 @@ const SAMPLE_QUERIES = [
   },
 ];
 
+const CHAT_STORAGE_KEY = 'campusos_chat_history_v1';
+
 const INITIAL_GREETING = {
   role: 'assistant',
   content:
@@ -76,7 +78,20 @@ export default function ChatWidget({ isFullPage = false }) {
 
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState([INITIAL_GREETING]);
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load chat history from localStorage', e);
+    }
+    return [INITIAL_GREETING];
+  });
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -88,6 +103,15 @@ export default function ChatWidget({ isFullPage = false }) {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isLoading]);
+
+  // Persist messages in localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+    } catch (e) {
+      console.warn('Failed to save chat history to localStorage', e);
+    }
+  }, [messages]);
 
   const handleSend = async (messageText = inputMessage) => {
     const text = messageText.trim();
@@ -106,11 +130,22 @@ export default function ChatWidget({ isFullPage = false }) {
     setIsLoading(true);
 
     try {
+      // Send clean, token-efficient history to backend
+      const cleanHistoryForBackend = newHistory.slice(-10).map((m) => ({
+        role: m.role,
+        content: m.content || m.reply || '',
+      }));
+
       // Call Member 2 / Member 3 backend endpoint
-      const response = await api.sendAgentChat(text, newHistory);
+      const response = await api.sendAgentChat(text, cleanHistoryForBackend);
 
       // Invalidate relevant dashboard queries if actions modified database
-      if (response.actions_taken && response.actions_taken.length > 0) {
+      const hasMutation = (response.actions_taken && response.actions_taken.some((a) => {
+        const name = (a.tool || a.name || '').toLowerCase();
+        return name.includes('book') || name.includes('register') || name.includes('create') || name.includes('update') || name.includes('cancel');
+      })) || Boolean(response.action_card);
+
+      if (hasMutation) {
         queryClient.invalidateQueries();
         addToast({
           type: 'info',
@@ -145,14 +180,18 @@ export default function ChatWidget({ isFullPage = false }) {
   };
 
   const handleResetChat = () => {
-    setMessages([
-      {
-        role: 'assistant',
-        content:
-          "Conversation reset. I am ready for your campus questions or booking instructions!",
-        actions_taken: [],
-      },
-    ]);
+    const resetState = [INITIAL_GREETING];
+    setMessages(resetState);
+    try {
+      localStorage.removeItem(CHAT_STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed to clear chat history from localStorage', e);
+    }
+    addToast({
+      type: 'info',
+      title: 'Chat History Cleared',
+      message: 'Started a fresh conversation with CampusCopilot AI.',
+    });
   };
 
   return (
@@ -169,7 +208,7 @@ export default function ChatWidget({ isFullPage = false }) {
           </div>
           <div>
             <h3 className="font-extrabold text-sm text-black dark:text-white tracking-tight flex items-center gap-2">
-              CampusOS Assistant
+              CampusCopilot AI
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             </h3>
             <p className="text-[11px] text-black/75 dark:text-emerald-400/80 font-medium">
@@ -178,14 +217,21 @@ export default function ChatWidget({ isFullPage = false }) {
           </div>
         </div>
 
-        <button
-          onClick={handleResetChat}
-          className="p-1.5 rounded-lg text-black hover:text-emerald-700 dark:hover:text-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 transition flex items-center gap-1 text-xs font-semibold"
-          title="Reset conversation"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Reset</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {messages.length > 1 && (
+            <span className="hidden sm:inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
+              {messages.length - 1} {messages.length - 1 === 1 ? 'message' : 'messages'} stored
+            </span>
+          )}
+          <button
+            onClick={handleResetChat}
+            className="p-1.5 px-2.5 rounded-lg text-black hover:text-rose-600 dark:text-emerald-300 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-emerald-100 dark:border-emerald-800/60 hover:border-rose-200 dark:hover:border-rose-800/60 transition flex items-center gap-1.5 text-xs font-semibold shadow-sm"
+            title="Clear stored chat history"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Clear History</span>
+          </button>
+        </div>
       </div>
 
       {/* Suggested Quick Prompts */}

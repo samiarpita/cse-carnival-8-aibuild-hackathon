@@ -470,7 +470,17 @@ export const api = {
   },
 
   // AI Agent Chat with interactive query processing and action detection
-  chat: async ({ message, history = [] }) => {
+  chat: async (param1, param2 = []) => {
+    let message = '';
+    let history = [];
+    if (typeof param1 === 'object' && param1 !== null && 'message' in param1) {
+      message = param1.message || '';
+      history = Array.isArray(param1.history) ? param1.history : [];
+    } else {
+      message = param1 || '';
+      history = Array.isArray(param2) ? param2 : [];
+    }
+
     return request(
       `/agent/chat`,
       { method: 'POST', body: JSON.stringify({ message, history }) },
@@ -629,6 +639,11 @@ export const api = {
         };
       }
     );
+  },
+
+  // Alias for chat endpoint supporting sendAgentChat(message, history)
+  sendAgentChat: async (message, history = []) => {
+    return api.chat(message, history);
   },
 
   // Reset local database back to seed files

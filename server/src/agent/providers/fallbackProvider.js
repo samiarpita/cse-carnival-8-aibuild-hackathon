@@ -28,11 +28,41 @@ export class FallbackProvider {
       return res;
     };
 
+    // Extract recent contextual entities from conversation history for multi-turn reasoning
+    let contextRoom = null;
+    let contextCourse = null;
+    if (Array.isArray(history) && history.length > 0) {
+      for (let i = history.length - 1; i >= 0; i--) {
+        const item = history[i];
+        const hText = typeof item.content === 'string' ? item.content : (typeof item.reply === 'string' ? item.reply : '');
+        if (!contextRoom) {
+          const rm = hText.match(/\b(7[A-C]\d{2}|9A\d{2})\b/i);
+          if (rm) contextRoom = rm[1].toUpperCase();
+        }
+        if (!contextCourse) {
+          const cm = hText.match(/\b(cse\s*\d{4}|ipe\s*\d{4})\b/i);
+          if (cm) contextCourse = cm[1].toUpperCase().replace(/\s+/, ' ');
+        }
+        if (contextRoom && contextCourse) break;
+      }
+    }
+
+    // Friendly response if student asks how to clear or reset chat history
+    if (lower.includes('clear chat') || lower.includes('clear history') || lower.includes('reset chat') || lower.includes('delete chat')) {
+      return {
+        reply: "🔄 **Chat History Management**: You can reset or clear your conversation history at any time by clicking the **Clear History** button at the top-right corner of the chat window.",
+        actions_taken: [],
+        action_card: null
+      };
+    }
+
     // =========================================================================
     // 1. REFUSAL PATH (Unauthorized, destructive, or policy violation requests)
     // =========================================================================
     const isDestructive =
       (lower.includes('delete') || lower.includes('drop') || lower.includes('wipe') || lower.includes('clear')) &&
+      !lower.includes('chat') &&
+      !lower.includes('conversation') &&
       (lower.includes('announcement') ||
         lower.includes('assignment') ||
         lower.includes('schedule') ||
@@ -361,7 +391,8 @@ export class FallbackProvider {
 
     if (mentionedDay && (lower.includes('class') || lower.includes('schedule') || lower.includes('lecture') || lower.includes('routine'))) {
       const schedules = await callTool('get_schedule', { day: mentionedDay });
-      if (!schedules || schedules.length === 0) {
+      const schedulesList = Array.isArray(schedules) ? schedules : [];
+      if (schedulesList.length === 0) {
         return {
           reply: `You have no scheduled classes on **${mentionedDay}**.`,
           actions_taken,
@@ -369,7 +400,7 @@ export class FallbackProvider {
         };
       }
 
-      const sorted = [...schedules].sort((a, b) => a.start_time.localeCompare(b.start_time));
+      const sorted = [...schedulesList].sort((a, b) => a.start_time.localeCompare(b.start_time));
       const list = sorted
         .map(
           (s) =>
@@ -732,9 +763,9 @@ export class FallbackProvider {
     // =========================================================================
     // 14. ACTION: "Book Room 7A02 tomorrow from 3 PM to 5 PM."
     // =========================================================================
-    const roomMatch = text.match(/\b(7[A-C]\d{2})\b/i);
-    if (lower.includes('book') && roomMatch) {
-      const roomNumber = roomMatch[1].toUpperCase();
+    const directRoomMatch = text.match(/\b(7[A-C]\d{2})\b/i);
+    const roomNumber = directRoomMatch ? directRoomMatch[1].toUpperCase() : (lower.includes('it') || lower.includes('that') || lower.includes('room') ? contextRoom : null);
+    if (lower.includes('book') && roomNumber) {
       const now = await callTool('get_current_datetime');
 
       let bookingDate = now.date;
