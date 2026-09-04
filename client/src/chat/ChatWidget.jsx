@@ -110,7 +110,12 @@ export default function ChatWidget({ isFullPage = false }) {
       const response = await api.sendAgentChat(text, newHistory);
 
       // Invalidate relevant dashboard queries if actions modified database
-      if (response.actions_taken && response.actions_taken.length > 0) {
+      const hasMutation = (response.actions_taken && response.actions_taken.some((a) => {
+        const name = (a.tool || a.name || '').toLowerCase();
+        return name.includes('book') || name.includes('register') || name.includes('create') || name.includes('update') || name.includes('cancel');
+      })) || Boolean(response.action_card);
+
+      if (hasMutation) {
         queryClient.invalidateQueries();
         addToast({
           type: 'info',
@@ -169,7 +174,7 @@ export default function ChatWidget({ isFullPage = false }) {
           </div>
           <div>
             <h3 className="font-extrabold text-sm text-black dark:text-white tracking-tight flex items-center gap-2">
-              CampusOS Assistant
+              CampusCopilot AI
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             </h3>
             <p className="text-[11px] text-black/75 dark:text-emerald-400/80 font-medium">

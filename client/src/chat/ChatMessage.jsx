@@ -82,7 +82,7 @@ export default function ChatMessage({ message }) {
         {/* Author Label & Timestamp */}
         <div className="flex items-center gap-2 mb-1 px-1">
           <span className="text-[11px] font-bold text-black dark:text-emerald-400/80">
-            {isUser ? 'You (Student)' : 'CampusOS Agent'}
+            {isUser ? 'You (Student)' : 'CampusCopilot AI'}
           </span>
           <span className="text-[10px] text-black/70 dark:text-emerald-500/60 font-mono">
             {message.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -106,7 +106,7 @@ export default function ChatMessage({ message }) {
                   className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/60"
                 >
                   <Wrench className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                  tool: {action.name || action.type}
+                  tool: {action.tool || action.name || action.type}
                 </span>
               ))}
             </div>
