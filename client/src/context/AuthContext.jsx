@@ -146,7 +146,9 @@ export function AuthProvider({ children }) {
       setUser(data.user);
       return data.user;
     } catch (err) {
-      // If network failure, provide helpful error
+      if (err.name === 'TypeError' || err.message?.includes('fetch')) {
+        throw new Error('Cannot reach the CampusOS backend server (port 4000). Please ensure the backend is running.');
+      }
       throw err;
     }
   };
@@ -178,6 +180,9 @@ export function AuthProvider({ children }) {
       setUser(data.user);
       return data.user;
     } catch (err) {
+      if (err.name === 'TypeError' || err.message?.includes('fetch')) {
+        throw new Error('Cannot reach the CampusOS backend server (port 4000). Please ensure the backend is running.');
+      }
       throw err;
     }
   };
