@@ -391,7 +391,8 @@ export class FallbackProvider {
 
     if (mentionedDay && (lower.includes('class') || lower.includes('schedule') || lower.includes('lecture') || lower.includes('routine'))) {
       const schedules = await callTool('get_schedule', { day: mentionedDay });
-      if (!schedules || schedules.length === 0) {
+      const schedulesList = Array.isArray(schedules) ? schedules : [];
+      if (schedulesList.length === 0) {
         return {
           reply: `You have no scheduled classes on **${mentionedDay}**.`,
           actions_taken,
@@ -399,7 +400,7 @@ export class FallbackProvider {
         };
       }
 
-      const sorted = [...schedules].sort((a, b) => a.start_time.localeCompare(b.start_time));
+      const sorted = [...schedulesList].sort((a, b) => a.start_time.localeCompare(b.start_time));
       const list = sorted
         .map(
           (s) =>
