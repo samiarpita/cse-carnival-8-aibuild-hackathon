@@ -6,7 +6,7 @@ import {
   initialAssignments,
 } from './mockData';
 
-const BASE_URL = '/api';
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Reactive local store backed by localStorage with instant fallback
 const STORAGE_KEYS = {

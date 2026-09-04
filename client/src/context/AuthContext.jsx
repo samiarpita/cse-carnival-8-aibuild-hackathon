@@ -34,6 +34,7 @@ const DEFAULT_USERS = [
 
 const STORAGE_KEY_USER = 'campusos_current_user_v1';
 const STORAGE_KEY_TOKEN = 'campusos_auth_token_v1';
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -85,7 +86,7 @@ export function AuthProvider({ children }) {
       const currentToken = localStorage.getItem(STORAGE_KEY_TOKEN);
       if (currentToken) {
         try {
-          const res = await fetch('/api/auth/me', {
+          const res = await fetch(`${API_BASE}/auth/me`, {
             headers: {
               Authorization: `Bearer ${currentToken}`,
             },
@@ -103,7 +104,7 @@ export function AuthProvider({ children }) {
 
       // Fetch demo users from backend database
       try {
-        const usersRes = await fetch('/api/auth/users');
+        const usersRes = await fetch(`${API_BASE}/auth/users`);
         if (usersRes.ok) {
           const usersData = await usersRes.json();
           if (isMounted && usersData.users && usersData.users.length > 0) {
@@ -128,7 +129,7 @@ export function AuthProvider({ children }) {
 
   const login = async ({ emailOrId, password }) => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -153,7 +154,7 @@ export function AuthProvider({ children }) {
 
   const register = async ({ name, email, student_id, department, role, password }) => {
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
