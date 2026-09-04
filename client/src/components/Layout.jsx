@@ -39,7 +39,7 @@ export default function Layout() {
   const { addToast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, loading, logout } = useAuth();
 
   const handleResetSeed = () => {
     if (window.confirm('Reset all 5 systems back to the original seed data?')) {
@@ -60,7 +60,13 @@ export default function Layout() {
       title: 'Signed Out',
       message: 'You have been signed out of CampusOS.',
     });
+    navigate('/', { replace: true });
   };
+
+  // If unauthenticated, redirect out of the dashboard to the Landing Page
+  if (!loading && !isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
 
   // Current active navigation object for the top header breadcrumb
   const currentNav =

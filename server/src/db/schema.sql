@@ -77,3 +77,15 @@ CREATE TABLE IF NOT EXISTS assignments (
   status TEXT NOT NULL DEFAULT 'pending',
   marks NUMERIC
 );
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  student_id TEXT UNIQUE,
+  department TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'Student' CHECK (role IN ('Student', 'Faculty', 'Club Organizer', 'Admin')),
+  password_hash TEXT NOT NULL,
+  avatar TEXT DEFAULT '👨‍🎓',
+  created_at TEXT NOT NULL
+);

@@ -21,6 +21,7 @@ import {
   User,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/Toast';
 import ThemeToggle from '../components/ThemeToggle';
 
 const SYSTEM_FEATURES = [
@@ -78,6 +79,16 @@ const STATS = [
 
 export default function LandingPage() {
   const { user, isAuthenticated, logout } = useAuth();
+  const { addToast } = useToast();
+
+  const handleSignOut = () => {
+    logout();
+    addToast({
+      type: 'info',
+      title: 'Signed Out',
+      message: 'You have been signed out of CampusOS.',
+    });
+  };
 
   return (
     <div className="relative min-h-screen bg-white dark:bg-black text-black dark:text-emerald-50 overflow-hidden flex flex-col justify-between transition-colors duration-300 selection:bg-emerald-500 selection:text-white">
@@ -149,7 +160,7 @@ export default function LandingPage() {
                   </Link>
 
                   <button
-                    onClick={logout}
+                    onClick={handleSignOut}
                     title="Sign Out"
                     className="p-2 rounded-xl text-black/70 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-500/10 transition"
                   >

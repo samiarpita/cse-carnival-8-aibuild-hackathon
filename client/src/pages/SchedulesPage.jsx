@@ -15,12 +15,14 @@ import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../context/AuthContext';
 
 const AUST_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
 
 export default function SchedulesPage() {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
+  const { isFaculty } = useAuth();
 
   const [search, setSearch] = useState('');
   const [selectedDay, setSelectedDay] = useState('all');
@@ -185,13 +187,15 @@ export default function SchedulesPage() {
           </p>
         </div>
 
-        <button
-          onClick={openAddForm}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02]"
-        >
-          <Plus className="w-4 h-4" />
-          Add Class Routine
-        </button>
+        {isFaculty && (
+          <button
+            onClick={openAddForm}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02]"
+          >
+            <Plus className="w-4 h-4" />
+            Add Class Routine
+          </button>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -255,10 +259,10 @@ export default function SchedulesPage() {
           description={
             search || selectedDay !== 'all'
               ? 'No classes match your current search or day filter.'
-              : 'Add your first class routine to get started.'
+              : isFaculty ? 'Add your first class routine to get started.' : 'No class routines scheduled.'
           }
-          actionText="Add Class"
-          onAction={openAddForm}
+          actionText={isFaculty ? "Add Class" : undefined}
+          onAction={isFaculty ? openAddForm : undefined}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -308,23 +312,25 @@ export default function SchedulesPage() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-4 mt-4 border-t border-emerald-100 dark:border-emerald-900/30">
-                <button
-                  onClick={() => openEditForm(item)}
-                  className="p-1.5 rounded-lg text-black hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 transition"
-                  title="Edit Class Routine"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setDeletingId(item.id)}
-                  className="p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/50 transition shadow-sm"
-                  title="Cancel / Delete Class"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              {/* Action Buttons (Faculty Only) */}
+              {isFaculty && (
+                <div className="flex items-center justify-end gap-2 pt-4 mt-4 border-t border-emerald-100 dark:border-emerald-900/30">
+                  <button
+                    onClick={() => openEditForm(item)}
+                    className="p-1.5 rounded-lg text-black hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 transition"
+                    title="Edit Class Routine"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setDeletingId(item.id)}
+                    className="p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/50 transition shadow-sm"
+                    title="Cancel / Delete Class"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

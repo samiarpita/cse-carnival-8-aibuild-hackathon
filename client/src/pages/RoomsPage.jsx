@@ -18,6 +18,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../context/AuthContext';
 
 const ROOM_TYPES = ['classroom', 'lab', 'seminar'];
 const EQUIPMENT_OPTIONS = [
@@ -32,6 +33,7 @@ const EQUIPMENT_OPTIONS = [
 ];
 
 export default function RoomsPage() {
+  const { isFaculty } = useAuth();
   const queryClient = useQueryClient();
   const { addToast } = useToast();
 
@@ -274,13 +276,15 @@ export default function RoomsPage() {
           </p>
         </div>
 
-        <button
-          onClick={openAddForm}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02]"
-        >
-          <Plus className="w-4 h-4" />
-          Add Room
-        </button>
+        {isFaculty && (
+          <button
+            onClick={openAddForm}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02]"
+          >
+            <Plus className="w-4 h-4" />
+            Add Room
+          </button>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -357,8 +361,8 @@ export default function RoomsPage() {
         <EmptyState
           title="No rooms found"
           description="No rooms match your filter criteria or search query."
-          actionText="Add Room"
-          onAction={openAddForm}
+          actionText={isFaculty ? "Add Room" : undefined}
+          onAction={isFaculty ? openAddForm : undefined}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -469,20 +473,24 @@ export default function RoomsPage() {
                   Book Slot
                 </button>
 
-                <button
-                  onClick={() => openEditForm(room)}
-                  className="p-2 rounded-xl text-black hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 transition"
-                  title="Edit Room"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setDeletingId(room.id)}
-                  className="p-2 rounded-xl text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/50 transition shadow-sm"
-                  title="Delete Room"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {isFaculty && (
+                  <>
+                    <button
+                      onClick={() => openEditForm(room)}
+                      className="p-2 rounded-xl text-black hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 transition"
+                      title="Edit Room"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeletingId(room.id)}
+                      className="p-2 rounded-xl text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/50 transition shadow-sm"
+                      title="Delete Room"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}

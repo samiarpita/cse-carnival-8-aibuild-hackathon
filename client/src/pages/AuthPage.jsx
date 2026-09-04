@@ -14,7 +14,6 @@ import {
   GraduationCap,
   Building,
   ShieldCheck,
-  Zap,
   ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -31,11 +30,45 @@ const DEPARTMENTS = [
   'Business Administration',
 ];
 
+export function evaluatePasswordStrength(password = '') {
+  const checks = {
+    length: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+  };
+
+  const score = Object.values(checks).filter(Boolean).length;
+  
+  let label = 'Weak';
+  let color = 'bg-rose-500 text-rose-600 dark:text-rose-400';
+  let barColor = 'bg-rose-500';
+  let percentage = 20;
+
+  if (score === 5) {
+    label = 'Strong';
+    color = 'bg-emerald-500 text-emerald-600 dark:text-emerald-400';
+    barColor = 'bg-emerald-500';
+    percentage = 100;
+  } else if (score >= 3) {
+    label = 'Moderate';
+    color = 'bg-amber-500 text-amber-600 dark:text-amber-400';
+    barColor = 'bg-amber-500';
+    percentage = score * 20;
+  } else if (score > 0) {
+    percentage = score * 20;
+  }
+
+  const isValid = score === 5;
+  return { checks, score, label, color, barColor, percentage, isValid };
+}
+
 export default function AuthPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { login, register, loginAsDemo, isAuthenticated, user } = useAuth();
+  const { login, register, isAuthenticated, user } = useAuth();
   const { addToast } = useToast();
 
   // Mode: 'login' or 'register' (synced with query param or path)
@@ -46,6 +79,8 @@ export default function AuthPage() {
 
   const [mode, setMode] = useState(initialMode);
   const [showPassword, setShowPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // Login Form State
@@ -127,11 +162,12 @@ export default function AuthPage() {
       return;
     }
 
-    if (registerForm.password.length < 6) {
+    const strength = evaluatePasswordStrength(registerForm.password);
+    if (!strength.isValid) {
       addToast({
         type: 'error',
-        title: 'Password Too Short',
-        message: 'Password must be at least 6 characters long.',
+        title: 'Password Too Weak',
+        message: 'Password must contain at least 8 characters with uppercase, lowercase, number, and special character.',
       });
       return;
     }
@@ -172,16 +208,6 @@ export default function AuthPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickDemo = (role) => {
-    const demoUser = loginAsDemo(role);
-    addToast({
-      type: 'info',
-      title: `Logged in as ${role}`,
-      message: `Active session: ${demoUser.name} (${demoUser.student_id})`,
-    });
-    navigate('/schedules');
   };
 
   return (
@@ -300,25 +326,9 @@ export default function AuthPage() {
 
               {/* Password */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-emerald-950 dark:text-slate-200">
-                    Password
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginForm({ ...loginForm, password: 'password123' });
-                      addToast({
-                        type: 'info',
-                        title: 'Demo Password Filled',
-                        message: 'Filled "password123" for quick demo sign-in.',
-                      });
-                    }}
-                    className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
-                  >
-                    Use default password?
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-emerald-950 dark:text-slate-200 mb-1.5">
+                  Password
+                </label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-emerald-700 dark:text-emerald-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -415,7 +425,6 @@ export default function AuthPage() {
                   >
                     <option value="Student">Student</option>
                     <option value="Faculty">Faculty</option>
-                    <option value="Club Organizer">Club Organizer</option>
                   </select>
                 </div>
               </div>
@@ -462,30 +471,105 @@ export default function AuthPage() {
                   <label className="block text-xs font-bold text-emerald-950 dark:text-slate-200 mb-1">
                     Password *
                   </label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Min 6 characters"
-                    value={registerForm.password}
-                    onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-emerald-50/50 dark:bg-slate-900/90 border border-emerald-300/80 dark:border-emerald-800/60 text-sm text-slate-900 dark:text-white placeholder-emerald-900/40 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showRegisterPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Min 8 characters"
+                      value={registerForm.password}
+                      onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
+                      className="w-full pl-3 pr-9 py-2 rounded-xl bg-emerald-50/50 dark:bg-slate-900/90 border border-emerald-300/80 dark:border-emerald-800/60 text-sm text-slate-900 dark:text-white placeholder-emerald-900/40 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                      className="p-1 text-slate-400 hover:text-emerald-600 dark:hover:text-white absolute right-2.5 top-1/2 -translate-y-1/2"
+                    >
+                      {showRegisterPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-emerald-950 dark:text-slate-200 mb-1">
                     Confirm Password *
                   </label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Re-enter password"
-                    value={registerForm.confirmPassword}
-                    onChange={(e) => setRegisterForm({ ...registerForm, confirmPassword: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-emerald-50/50 dark:bg-slate-900/90 border border-emerald-300/80 dark:border-emerald-800/60 text-sm text-slate-900 dark:text-white placeholder-emerald-900/40 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Re-enter password"
+                      value={registerForm.confirmPassword}
+                      onChange={(e) => setRegisterForm({ ...registerForm, confirmPassword: e.target.value })}
+                      className="w-full pl-3 pr-9 py-2 rounded-xl bg-emerald-50/50 dark:bg-slate-900/90 border border-emerald-300/80 dark:border-emerald-800/60 text-sm text-slate-900 dark:text-white placeholder-emerald-900/40 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="p-1 text-slate-400 hover:text-emerald-600 dark:hover:text-white absolute right-2.5 top-1/2 -translate-y-1/2"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {/* Password Strength Meter & Live Security Checklist */}
+              {registerForm.password && (
+                <div className="p-3 rounded-2xl bg-emerald-500/5 dark:bg-emerald-950/40 border border-emerald-500/15 space-y-2 animate-in fade-in duration-200">
+                  {(() => {
+                    const str = evaluatePasswordStrength(registerForm.password);
+                    return (
+                      <>
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-emerald-950 dark:text-slate-300">
+                            Password Strength:
+                          </span>
+                          <span className={`font-extrabold uppercase tracking-wider text-[10px] ${str.color}`}>
+                            {str.label} ({str.score}/5)
+                          </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className={`h-full ${str.barColor} transition-all duration-300`}
+                            style={{ width: `${str.percentage}%` }}
+                          />
+                        </div>
+
+                        {/* Constraints Checklist */}
+                        <div className="grid grid-cols-2 gap-1 text-[10px] pt-1">
+                          <div className={`flex items-center gap-1 font-medium ${str.checks.length ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                            <CheckCircle2 className={`w-3 h-3 ${str.checks.length ? 'text-emerald-600 dark:text-emerald-400' : 'opacity-30'}`} />
+                            <span>8+ characters</span>
+                          </div>
+
+                          <div className={`flex items-center gap-1 font-medium ${str.checks.uppercase ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                            <CheckCircle2 className={`w-3 h-3 ${str.checks.uppercase ? 'text-emerald-600 dark:text-emerald-400' : 'opacity-30'}`} />
+                            <span>Uppercase (A-Z)</span>
+                          </div>
+
+                          <div className={`flex items-center gap-1 font-medium ${str.checks.lowercase ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                            <CheckCircle2 className={`w-3 h-3 ${str.checks.lowercase ? 'text-emerald-600 dark:text-emerald-400' : 'opacity-30'}`} />
+                            <span>Lowercase (a-z)</span>
+                          </div>
+
+                          <div className={`flex items-center gap-1 font-medium ${str.checks.number ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                            <CheckCircle2 className={`w-3 h-3 ${str.checks.number ? 'text-emerald-600 dark:text-emerald-400' : 'opacity-30'}`} />
+                            <span>Number (0-9)</span>
+                          </div>
+
+                          <div className={`flex items-center gap-1 font-medium col-span-2 ${str.checks.special ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                            <CheckCircle2 className={`w-3 h-3 ${str.checks.special ? 'text-emerald-600 dark:text-emerald-400' : 'opacity-30'}`} />
+                            <span>Special symbol (!@#$%^&*...)</span>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Register Submit */}
               <button
@@ -498,41 +582,6 @@ export default function AuthPage() {
               </button>
             </form>
           )}
-
-          {/* Quick 1-Click Demo Login Bar */}
-          <div className="mt-6 pt-5 border-t border-emerald-900/10 dark:border-emerald-800/40">
-            <div className="flex items-center justify-between text-xs text-emerald-900/70 dark:text-slate-400 mb-2.5">
-              <span className="font-semibold uppercase tracking-wider text-[10px] flex items-center gap-1 text-emerald-800 dark:text-emerald-400">
-                <Zap className="w-3.5 h-3.5" />
-                Quick Demo Access:
-              </span>
-              <span className="text-[11px]">Instant Grading Login</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('Student')}
-                className="px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-900 dark:text-emerald-200 border border-emerald-500/25 transition text-left"
-              >
-                <div className="font-bold flex items-center gap-1.5">
-                  <span>👨‍🎓 Sakibul Hassan</span>
-                </div>
-                <div className="text-[10px] opacity-70">Student • CSE Dept</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('Faculty')}
-                className="px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-900 dark:text-emerald-200 border border-emerald-500/25 transition text-left"
-              >
-                <div className="font-bold flex items-center gap-1.5">
-                  <span>👨‍🏫 Prof. Mahbub</span>
-                </div>
-                <div className="text-[10px] opacity-70">Faculty • CSE Dept</div>
-              </button>
-            </div>
-          </div>
         </div>
       </main>
 

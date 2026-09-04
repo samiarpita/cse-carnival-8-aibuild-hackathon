@@ -10,7 +10,6 @@ const DEFAULT_USERS = [
     student_id: '20-40532',
     department: 'Computer Science & Engineering',
     role: 'Student',
-    password: 'password123',
     avatar: '👨‍🎓',
   },
   {
@@ -20,7 +19,6 @@ const DEFAULT_USERS = [
     student_id: 'FAC-701',
     department: 'Computer Science & Engineering',
     role: 'Faculty',
-    password: 'password123',
     avatar: '👨‍🏫',
   },
   {
@@ -30,38 +28,45 @@ const DEFAULT_USERS = [
     student_id: 'CLUB-01',
     department: 'CSE / AUSTPIC',
     role: 'Club Organizer',
-    password: 'password123',
     avatar: '🏆',
   },
 ];
 
 const STORAGE_KEY_USER = 'campusos_current_user_v1';
-const STORAGE_KEY_ALL_USERS = 'campusos_registered_users_v1';
+const STORAGE_KEY_TOKEN = 'campusos_auth_token_v1';
 
 export function AuthProvider({ children }) {
-  const [users, setUsers] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_ALL_USERS);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return DEFAULT_USERS;
-  });
-
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_USER);
       if (saved) return JSON.parse(saved);
     } catch (e) {}
-    // Default to logged-in as Sakibul Hassan for seamless hackathon grading, or null
-    return DEFAULT_USERS[0];
+    return null;
   });
 
+  const [token, setToken] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_TOKEN) || null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const [demoUsers, setDemoUsers] = useState(DEFAULT_USERS);
+  const [loading, setLoading] = useState(true);
+
+  // Sync token to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_ALL_USERS, JSON.stringify(users));
+      if (token) {
+        localStorage.setItem(STORAGE_KEY_TOKEN, token);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_TOKEN);
+      }
     } catch (e) {}
-  }, [users]);
+  }, [token]);
 
+  // Sync user to localStorage
   useEffect(() => {
     try {
       if (user) {
@@ -72,80 +77,149 @@ export function AuthProvider({ children }) {
     } catch (e) {}
   }, [user]);
 
-  const login = async ({ emailOrId, password }) => {
-    const trimmedIdentifier = emailOrId.trim().toLowerCase();
-    const found = users.find(
-      (u) =>
-        (u.email.toLowerCase() === trimmedIdentifier ||
-          (u.student_id && u.student_id.toLowerCase() === trimmedIdentifier)) &&
-        u.password === password
-    );
+  // On mount: fetch latest user profile with active token and fetch demo users
+  useEffect(() => {
+    let isMounted = true;
 
-    if (!found) {
-      // Check if identifier exists but password mismatch
-      const exists = users.find(
-        (u) =>
-          u.email.toLowerCase() === trimmedIdentifier ||
-          (u.student_id && u.student_id.toLowerCase() === trimmedIdentifier)
-      );
-      if (exists) {
-        throw new Error('Incorrect password. Please verify your credentials.');
+    async function initAuth() {
+      const currentToken = localStorage.getItem(STORAGE_KEY_TOKEN);
+      if (currentToken) {
+        try {
+          const res = await fetch('/api/auth/me', {
+            headers: {
+              Authorization: `Bearer ${currentToken}`,
+            },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (isMounted && data.user) {
+              setUser(data.user);
+            }
+          }
+        } catch (err) {
+          console.warn('Could not verify token with backend:', err);
+        }
       }
-      throw new Error('Account not found with this email or Student ID. Please register first.');
+
+      // Fetch demo users from backend database
+      try {
+        const usersRes = await fetch('/api/auth/users');
+        if (usersRes.ok) {
+          const usersData = await usersRes.json();
+          if (isMounted && usersData.users && usersData.users.length > 0) {
+            setDemoUsers(usersData.users);
+          }
+        }
+      } catch (err) {
+        // Fallback to local default users
+      }
+
+      if (isMounted) {
+        setLoading(false);
+      }
     }
 
-    setUser(found);
-    return found;
+    initAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const login = async ({ emailOrId, password }) => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ emailOrId, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Login failed. Please check your credentials.');
+      }
+
+      setToken(data.token);
+      setUser(data.user);
+      return data.user;
+    } catch (err) {
+      // If network failure, provide helpful error
+      throw err;
+    }
   };
 
   const register = async ({ name, email, student_id, department, role, password }) => {
-    const trimmedEmail = email.trim().toLowerCase();
-    const trimmedId = student_id ? student_id.trim() : '';
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          student_id,
+          department,
+          role,
+          password,
+        }),
+      });
 
-    if (users.some((u) => u.email.toLowerCase() === trimmedEmail)) {
-      throw new Error('An account with this university email already exists.');
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Registration failed.');
+      }
+
+      setToken(data.token);
+      setUser(data.user);
+      return data.user;
+    } catch (err) {
+      throw err;
     }
-
-    if (trimmedId && users.some((u) => u.student_id && u.student_id.toLowerCase() === trimmedId.toLowerCase())) {
-      throw new Error(`An account with Student ID ${trimmedId} is already registered.`);
-    }
-
-    const newUser = {
-      id: `usr-${Date.now().toString().slice(-4)}`,
-      name: name.trim(),
-      email: trimmedEmail,
-      student_id: trimmedId || '26-' + Math.floor(10000 + Math.random() * 90000),
-      department: department || 'Computer Science & Engineering',
-      role: role || 'Student',
-      password: password,
-      avatar: role === 'Faculty' ? '👨‍🏫' : role === 'Club Organizer' ? '🏆' : '👨‍🎓',
-    };
-
-    setUsers((prev) => [newUser, ...prev]);
-    setUser(newUser);
-    return newUser;
   };
 
   const logout = () => {
+    setToken(null);
     setUser(null);
   };
 
-  const loginAsDemo = (role = 'Student') => {
-    const target = users.find((u) => u.role === role) || DEFAULT_USERS[0];
-    setUser(target);
-    return target;
+  const loginAsDemo = async (role = 'Student') => {
+    const target = demoUsers.find((u) => u.role === role) || DEFAULT_USERS[0];
+    try {
+      // Attempt backend authentication with default password
+      const loggedIn = await login({
+        emailOrId: target.email || target.student_id,
+        password: 'password123',
+      });
+      return loggedIn;
+    } catch (err) {
+      // Fallback to direct demo user setting
+      setUser(target);
+      return target;
+    }
   };
+
+  const isFaculty = user?.role?.toLowerCase() === 'faculty';
+  const isStudent = user?.role?.toLowerCase() === 'student';
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        token,
+        loading,
         isAuthenticated: Boolean(user),
+        isFaculty,
+        isStudent,
         login,
         register,
         logout,
         loginAsDemo,
-        demoUsers: DEFAULT_USERS,
+        demoUsers,
       }}
     >
       {children}

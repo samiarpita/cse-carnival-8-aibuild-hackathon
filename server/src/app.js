@@ -7,6 +7,7 @@ import announcementsRouter from './routes/announcements.js';
 import assignmentsRouter from './routes/assignments.js';
 import metaRouter from './routes/meta.js';
 import agentRouter from './routes/agent.js';
+import authRouter from './routes/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 export function createApp() {
@@ -26,6 +27,7 @@ export function createApp() {
   });
 
   // REST API Routes
+  app.use('/api/auth', authRouter);
   app.use('/api/schedules', schedulesRouter);
   app.use('/api/rooms', roomsRouter);
   app.use('/api/events', eventsRouter);

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { config } from '../config.js';
 
@@ -107,7 +108,68 @@ if (config.isSupabaseConfigured) {
       status TEXT NOT NULL DEFAULT 'pending',
       marks REAL
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      student_id TEXT UNIQUE,
+      department TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'Student',
+      password_hash TEXT NOT NULL,
+      avatar TEXT DEFAULT '👨‍🎓',
+      created_at TEXT NOT NULL
+    );
   `);
+}
+
+// Password hashing & verification
+export function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+export function verifyPassword(password, storedHash) {
+  if (!storedHash || !storedHash.includes(':')) return false;
+  const [salt, originalHash] = storedHash.split(':');
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return hash === originalHash;
+}
+
+// Token generation & verification
+export function generateToken(user) {
+  const payload = Buffer.from(JSON.stringify({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    name: user.name,
+    student_id: user.student_id,
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
+  })).toString('base64url');
+  
+  const signature = crypto.createHmac('sha256', process.env.JWT_SECRET || 'campusos_aust_secret_key_2026')
+    .update(payload)
+    .digest('base64url');
+  
+  return `${payload}.${signature}`;
+}
+
+export function verifyToken(token) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) return null;
+  const [payload, signature] = token.split('.');
+  const expectedSig = crypto.createHmac('sha256', process.env.JWT_SECRET || 'campusos_aust_secret_key_2026')
+    .update(payload)
+    .digest('base64url');
+  
+  if (signature !== expectedSig) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8'));
+    if (data.exp && data.exp < Date.now()) return null;
+    return data;
+  } catch (e) {
+    return null;
+  }
 }
 
 // Time overlap helper: [s1, e1) overlaps [s2, e2) if s1 < e2 && s2 < e1
@@ -858,6 +920,138 @@ export const db = {
         return true;
       } else {
         const res = sqliteDb.prepare('DELETE FROM assignments WHERE id = ?').run(id);
+        return res.changes > 0;
+      }
+    }
+  },
+
+  users: {
+    async getAll() {
+      if (supabase) {
+        const { data, error } = await supabase.from('users').select('id, name, email, student_id, department, role, avatar, created_at');
+        if (error) throw error;
+        return data;
+      } else {
+        return sqliteDb.prepare('SELECT id, name, email, student_id, department, role, avatar, created_at FROM users ORDER BY created_at ASC').all();
+      }
+    },
+
+    async getById(id) {
+      if (supabase) {
+        const { data, error } = await supabase.from('users').select('*').eq('id', id).single();
+        if (error && error.code !== 'PGRST116') throw error;
+        return data || null;
+      } else {
+        return sqliteDb.prepare('SELECT * FROM users WHERE id = ?').get(id) || null;
+      }
+    },
+
+    async getByEmail(email) {
+      const normalized = (email || '').trim().toLowerCase();
+      if (supabase) {
+        const { data, error } = await supabase.from('users').select('*').ilike('email', normalized).single();
+        if (error && error.code !== 'PGRST116') throw error;
+        return data || null;
+      } else {
+        return sqliteDb.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(normalized) || null;
+      }
+    },
+
+    async getByStudentId(studentId) {
+      const normalized = (studentId || '').trim().toLowerCase();
+      if (supabase) {
+        const { data, error } = await supabase.from('users').select('*').ilike('student_id', normalized).single();
+        if (error && error.code !== 'PGRST116') throw error;
+        return data || null;
+      } else {
+        return sqliteDb.prepare('SELECT * FROM users WHERE LOWER(student_id) = LOWER(?)').get(normalized) || null;
+      }
+    },
+
+    async getByIdentifier(identifier) {
+      const normalized = (identifier || '').trim().toLowerCase();
+      if (supabase) {
+        const { data, error } = await supabase.from('users').select('*').or(`email.ilike.${normalized},student_id.ilike.${normalized}`).single();
+        if (error && error.code !== 'PGRST116') throw error;
+        return data || null;
+      } else {
+        return sqliteDb.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(student_id) = LOWER(?)').get(normalized, normalized) || null;
+      }
+    },
+
+    async create(record) {
+      const newUser = {
+        id: record.id || `usr-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+        name: record.name,
+        email: record.email.trim().toLowerCase(),
+        student_id: record.student_id ? record.student_id.trim() : null,
+        department: record.department || 'Computer Science & Engineering',
+        role: record.role || 'Student',
+        password_hash: record.password_hash,
+        avatar: record.avatar || (record.role === 'Faculty' ? '👨‍🏫' : record.role === 'Club Organizer' ? '🏆' : '👨‍🎓'),
+        created_at: record.created_at || new Date().toISOString()
+      };
+
+      if (supabase) {
+        const { data, error } = await supabase.from('users').insert(newUser).select().single();
+        if (error) throw error;
+        return data;
+      } else {
+        const stmt = sqliteDb.prepare(`
+          INSERT INTO users (id, name, email, student_id, department, role, password_hash, avatar, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        stmt.run(
+          newUser.id,
+          newUser.name,
+          newUser.email,
+          newUser.student_id,
+          newUser.department,
+          newUser.role,
+          newUser.password_hash,
+          newUser.avatar,
+          newUser.created_at
+        );
+        return this.getById(newUser.id);
+      }
+    },
+
+    async update(id, updates) {
+      const existing = await this.getById(id);
+      if (!existing) return null;
+      const merged = { ...existing, ...updates };
+
+      if (supabase) {
+        const { data, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+      } else {
+        const stmt = sqliteDb.prepare(`
+          UPDATE users
+          SET name = ?, email = ?, student_id = ?, department = ?, role = ?, password_hash = ?, avatar = ?
+          WHERE id = ?
+        `);
+        stmt.run(
+          merged.name,
+          merged.email,
+          merged.student_id,
+          merged.department,
+          merged.role,
+          merged.password_hash,
+          merged.avatar,
+          id
+        );
+        return this.getById(id);
+      }
+    },
+
+    async delete(id) {
+      if (supabase) {
+        const { error } = await supabase.from('users').delete().eq('id', id);
+        if (error) throw error;
+        return true;
+      } else {
+        const res = sqliteDb.prepare('DELETE FROM users WHERE id = ?').run(id);
         return res.changes > 0;
       }
     }

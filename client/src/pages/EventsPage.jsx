@@ -19,10 +19,12 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../context/AuthContext';
 
 const EVENT_STATUSES = ['all', 'upcoming', 'ongoing', 'full', 'completed', 'cancelled'];
 
 export default function EventsPage() {
+  const { isFaculty } = useAuth();
   const queryClient = useQueryClient();
   const { addToast } = useToast();
 
@@ -249,13 +251,15 @@ export default function EventsPage() {
           </p>
         </div>
 
-        <button
-          onClick={openAddForm}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02]"
-        >
-          <Plus className="w-4 h-4" />
-          Create Event
-        </button>
+        {isFaculty && (
+          <button
+            onClick={openAddForm}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02]"
+          >
+            <Plus className="w-4 h-4" />
+            Create Event
+          </button>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -307,8 +311,8 @@ export default function EventsPage() {
         <EmptyState
           title="No events found"
           description="No campus events match your current filter selection."
-          actionText="Create Event"
-          onAction={openAddForm}
+          actionText={isFaculty ? "Create Event" : undefined}
+          onAction={isFaculty ? openAddForm : undefined}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -355,7 +359,7 @@ export default function EventsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-teal-700 dark:text-teal-400" />
+                      <MapPin className="w-3.5 h-3.5 text-teal-700 dark:teal-400" />
                       <span>Venue: <strong className="text-black dark:text-white font-extrabold">{evt.venue}</strong></span>
                     </div>
                   </div>
@@ -380,7 +384,7 @@ export default function EventsPage() {
                             ? 'bg-rose-500'
                             : percentFilled > 80
                             ? 'bg-amber-500'
-                            : 'bg-emerald-600 dark:bg-emerald-400'
+                            : 'bg-emerald-500'
                         }`}
                         style={{ width: `${percentFilled}%` }}
                       />
@@ -389,29 +393,24 @@ export default function EventsPage() {
 
                   {/* Registered Students Accordion List */}
                   {evt.registrations && evt.registrations.length > 0 && (
-                    <div className="border-t border-emerald-100 dark:border-emerald-900/30 pt-2.5">
-                      <span className="text-[11px] font-bold text-black dark:text-emerald-300 uppercase tracking-wider block mb-1.5">
-                        Attendee Roster ({evt.registrations.length})
+                    <div className="border-t border-emerald-100 dark:border-emerald-900/40 pt-2.5">
+                      <span className="text-[11px] font-bold text-black dark:text-emerald-300 block mb-1.5">
+                        Enrolled Students ({evt.registrations.length})
                       </span>
                       <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
                         {evt.registrations.map((r) => (
                           <div
                             key={r.student_id}
-                            className="flex items-center justify-between px-2 py-1 rounded-lg bg-white dark:bg-[#161616] border border-emerald-100 dark:border-emerald-800/60 text-[11px]"
+                            className="flex items-center justify-between p-1.5 rounded-lg bg-white dark:bg-[#161616] border border-emerald-200 dark:border-emerald-800/60 text-[10px] shadow-sm"
                           >
-                            <span className="font-bold text-black dark:text-white truncate">
-                              {r.name} <span className="text-black/80 dark:text-emerald-400/80 font-mono text-[10px]">({r.student_id})</span>
-                            </span>
+                            <div>
+                              <span className="font-bold text-black dark:text-white mr-1.5">{r.name}</span>
+                              <span className="font-mono text-black/70 dark:text-emerald-400/80">({r.student_id})</span>
+                            </div>
                             <button
-                              onClick={() =>
-                                setCancellingReg({
-                                  eventId: evt.id,
-                                  studentId: r.student_id,
-                                  studentName: r.name,
-                                 })
-                              }
-                              className="text-black hover:text-rose-700 dark:hover:text-rose-400 p-0.5"
-                              title="Cancel student registration"
+                              onClick={() => setCancellingReg({ eventId: evt.id, studentId: r.student_id })}
+                              className="text-black hover:text-rose-700 dark:hover:text-rose-400 p-0.5 rounded transition"
+                              title="Cancel Registration"
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -437,20 +436,24 @@ export default function EventsPage() {
                     {isFull ? 'At Capacity' : 'Register Student'}
                   </button>
 
-                  <button
-                    onClick={() => openEditForm(evt)}
-                    className="p-2 rounded-xl text-black hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 transition"
-                    title="Edit Event"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setDeletingId(evt.id)}
-                    className="p-2 rounded-xl text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/50 transition shadow-sm"
-                    title="Delete Event"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {isFaculty && (
+                    <>
+                      <button
+                        onClick={() => openEditForm(evt)}
+                        className="p-2 rounded-xl text-black hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 transition"
+                        title="Edit Event"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(evt.id)}
+                        className="p-2 rounded-xl text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/50 transition shadow-sm"
+                        title="Delete Event"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );

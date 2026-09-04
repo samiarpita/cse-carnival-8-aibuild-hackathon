@@ -159,7 +159,70 @@ async function runTests() {
     const assignments = await request('/assignments');
     assert(assignments.status === 200 && Array.isArray(assignments.data), `GET /api/assignments returns array (${assignments.data.length} assignments)`);
 
-    // 8. Agent Chat Scaffold
+    // 8. Authentication & Database User Tests
+    const weakRegRes = await request('/auth/register', {
+      method: 'POST',
+      body: {
+        name: 'Weak Pass Test',
+        email: 'weak.pass@aust.edu',
+        password: 'password123'
+      }
+    });
+    assert(weakRegRes.status === 400 && weakRegRes.data.error === 'weak_password', 'POST /api/auth/register rejects weak password with 400 (requires 8+ chars, upper, lower, number, special)');
+
+    const testRegEmail = `test.student.${Date.now()}@aust.edu`;
+    const regRes = await request('/auth/register', {
+      method: 'POST',
+      body: {
+        name: 'Arpita Dey',
+        email: testRegEmail,
+        student_id: `22-${Math.floor(10000 + Math.random() * 90000)}`,
+        department: 'Computer Science & Engineering',
+        role: 'Student',
+        password: 'Password123!'
+      }
+    });
+    assert(regRes.status === 201 && regRes.data.token && regRes.data.user.email === testRegEmail, 'POST /api/auth/register creates user with strong password and returns token');
+
+    const dupRegRes = await request('/auth/register', {
+      method: 'POST',
+      body: {
+        name: 'Duplicate Test',
+        email: testRegEmail,
+        password: 'Password123!'
+      }
+    });
+    assert(dupRegRes.status === 409, 'POST /api/auth/register rejects duplicate email with 409');
+
+    const loginRes = await request('/auth/login', {
+      method: 'POST',
+      body: {
+        emailOrId: '20-40532@aust.edu',
+        password: 'password123'
+      }
+    });
+    assert(loginRes.status === 200 && loginRes.data.token && loginRes.data.user.student_id === '20-40532', 'POST /api/auth/login authenticates seeded student');
+
+    const badLoginRes = await request('/auth/login', {
+      method: 'POST',
+      body: {
+        emailOrId: '20-40532@aust.edu',
+        password: 'wrong_password_here'
+      }
+    });
+    assert(badLoginRes.status === 401, 'POST /api/auth/login rejects wrong password with 401');
+
+    const meRes = await request('/auth/me', {
+      headers: {
+        Authorization: `Bearer ${loginRes.data.token}`
+      }
+    });
+    assert(meRes.status === 200 && meRes.data.user.student_id === '20-40532', 'GET /api/auth/me verifies Bearer token');
+
+    const usersListRes = await request('/auth/users');
+    assert(usersListRes.status === 200 && Array.isArray(usersListRes.data.users), `GET /api/auth/users returns available demo users (${usersListRes.data.users.length} users)`);
+
+    // 9. Agent Chat Scaffold
     const agentChat = await request('/agent/chat', {
       method: 'POST',
       body: { message: 'When is my next class?' }

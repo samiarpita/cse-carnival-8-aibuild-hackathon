@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { db } from './client.js';
+import { db, hashPassword } from './client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,6 +115,54 @@ async function seed() {
     }
   }
   console.log('✅ Assignments seeded.');
+
+  // 6. Default Users (Authentication)
+  const defaultUsers = [
+    {
+      id: 'usr-001',
+      name: 'Sakibul Hassan',
+      email: '20-40532@aust.edu',
+      student_id: '20-40532',
+      department: 'Computer Science & Engineering',
+      role: 'Student',
+      password_hash: hashPassword('password123'),
+      avatar: '👨‍🎓',
+      created_at: '2026-09-01T00:00:00.000Z'
+    },
+    {
+      id: 'usr-002',
+      name: 'Prof. Dr. Md. Shahriar Mahbub',
+      email: 'mahbub.cse@aust.edu',
+      student_id: 'FAC-701',
+      department: 'Computer Science & Engineering',
+      role: 'Faculty',
+      password_hash: hashPassword('password123'),
+      avatar: '👨‍🏫',
+      created_at: '2026-09-01T00:00:00.000Z'
+    },
+    {
+      id: 'usr-003',
+      name: 'AUSTPIC Executive',
+      email: 'austpic@aust.edu',
+      student_id: 'CLUB-01',
+      department: 'CSE / AUSTPIC',
+      role: 'Club Organizer',
+      password_hash: hashPassword('password123'),
+      avatar: '🏆',
+      created_at: '2026-09-01T00:00:00.000Z'
+    }
+  ];
+
+  console.log(`⏳ Seeding ${defaultUsers.length} initial user accounts...`);
+  for (const u of defaultUsers) {
+    const existing = await db.users.getById(u.id);
+    if (existing) {
+      await db.users.update(u.id, u);
+    } else {
+      await db.users.create(u);
+    }
+  }
+  console.log('✅ User accounts seeded.');
 
   console.log('🎉 Seeding successfully completed!');
 }
